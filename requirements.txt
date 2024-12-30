@@ -1,0 +1,14 @@
+numpy
+matplotlib
+opencv-python
+torch
+torchvision
+torchaudio
+ultralytics
+pydantic
+openpyxl
+pandas
+matplotlib
+shapely
+openpyxl
+grad-cam
