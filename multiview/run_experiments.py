@@ -12,10 +12,6 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 from sklearn.model_selection import KFold
 
-# from nn import MultiViewNetwork # TODO Choose this or the other one
-from nn_fpn import MultiViewNetwork
-
-from reference_nn import ReferenceMultiViewNetwork
 from dataloader import CustomDataset, set_random_seed
 
 
@@ -63,11 +59,19 @@ def test(model, device, test_loader):
 def main(seed):
     folds = 10
     epochs = 300
-    ground_truth = False #  visually-estimated / field-validated
     use_cuda = True
     batch_size = 8
-    reference_model = False
+    ground_truth = False #  visually-estimated / field-validated
+    model_selector = "FPN" # FPN / CountNet / without_FPN
 
+    if model_selector == "FPN":
+        from nn_fpn import MultiViewNetwork
+    elif model_selector == "CountNet":
+        from reference_nn import ReferenceMultiViewNetwork as MultiViewNetwork
+    elif model_selector == "without_FPN":
+        from nn import MultiViewNetwork
+    else:
+        raise
 
     set_random_seed(seed)
 
@@ -83,7 +87,6 @@ def main(seed):
                        'pin_memory': True}
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
-
 
 
 
@@ -119,16 +122,13 @@ def main(seed):
         test_dataset = CustomDataset(test_samples, data_path, augment=False, ground_truth=ground_truth)
         test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
 
-        if not reference_model:
-            print("Proposed method")
-            model = MultiViewNetwork().to(device)
+        model = MultiViewNetwork().to(device)
+        if model_selector in ["FPN", "withoutFPN"]:
             criterion = nn.SmoothL1Loss()
             optimizer = optim.AdamW(model.parameters(), lr=1e-3)
-            # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-6)
-            scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95) # TODO switch
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-6)
+            # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95) # TODO switch
         else:
-            print("Reference method (CountNet)")
-            model = ReferenceMultiViewNetwork().to(device)
             criterion = nn.MSELoss()
             optimizer = optim.Adam(model.parameters(), lr=1e-4)
             scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.972351)

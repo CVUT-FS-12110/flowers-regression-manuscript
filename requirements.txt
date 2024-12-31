@@ -12,3 +12,4 @@ matplotlib
 shapely
 openpyxl
 grad-cam
+albumentations
