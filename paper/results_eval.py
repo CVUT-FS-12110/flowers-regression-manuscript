@@ -9,11 +9,11 @@ from scipy.optimize import curve_fit
 df = pd.read_csv('df_dump.csv', index_col="orig_name")
 
 reference_method_yolo_path = "../yolo/results"
-regeression_paths = [
-    ("result-fpn", "../multiview/results/FPN 300epoch (cvdev)"),
-    ("result-standard", "../multiview/results/standard 300epoch (cvdev)"),
-    ("result-fpn-exponential", "../multiview/results/FPN exp 300epoch (cvdev)"),
-    ("result-countnet", "../multiview/results/Countnet 300epoch (cvdev)")
+regeression_paths = [ # TODO put correct folders with results when finish your experiments
+    ("result-fpn", "../multiview/results/FPN"),
+    ("result-standard", "../multiview/results/standard"),
+    ("result-fpn-exponential", "../multiview/results/FPN exp"),
+    ("result-countnet", "../multiview/results/Countnet")
 ]
 
 for result_label, result_path in regeression_paths:

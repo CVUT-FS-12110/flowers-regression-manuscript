@@ -5,11 +5,7 @@ import pandas as pd
 import matplotlib.pylab as plt
 from scipy.optimize import curve_fit
 
-# proposed_method_path = "../multiview/results/3-lr_01-xavier_01-dropout_cossine-decay"
-# proposed_method_path = "../multiview/results/CountNet (cvdev)"
-# proposed_method_path = "../multiview/results/cross_attention V2"
-# proposed_method_path = "../multiview/results/standard LR modified"
-proposed_method_path = "../multiview/results/standard 300epoch (cvdev)"
+proposed_method_path = "../multiview/results/your_folder" # TODO put correct folder
 
 all_dataframes = []
 
