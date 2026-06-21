@@ -5,12 +5,12 @@ import pandas as pd
 import matplotlib.pylab as plt
 from scipy.optimize import curve_fit
 
-proposed_method_path = "../multiview/results/your_folder" # TODO put correct folder
+proposed_method_path = "../multiview/results/b8_FPN_True"
 
 all_dataframes = []
 
 # Iterate through all files matching the pattern
-for ground_truth in [False, ]:
+for ground_truth in [True, ]:
     filepaths = os.path.join(proposed_method_path, f"convergence_*_{ground_truth}.tsv")
     for filepath in glob.glob(filepaths):
         convergence_df = pd.read_csv(filepath, sep="\t", header=None)

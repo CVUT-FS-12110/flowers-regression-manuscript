@@ -1,3 +1,16 @@
+*.pbs
+multiview/results/
+multiview/checkpoints/
+multivew/final_data/
+multivew/labels/
+multiview/logs/
+multivew/paper/
+yolo/final_data/
+yolo/results/
+yolo/yaml_splits/
+#paper/
+
+
 .idea/
 
 # Byte-compiled / optimized / DLL files

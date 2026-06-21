@@ -1,166 +1,67 @@
-import time
-import os
+import argparse
 
-os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
-
-from glob import glob
-import numpy as np
-
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.optim.lr_scheduler import StepLR
-from sklearn.model_selection import KFold
-
-from dataloader import CustomDataset, set_random_seed
+from experiment_lib import (
+    ExperimentConfig,
+    add_common_args,
+    expand_ground_truths,
+    run_seed,
+    slug,
+)
 
 
-
-def train(model, criterion, device, optimizer, epoch, train_loader):
-    model.train()
-
-
-    for batch_idx, (images_a, images_b, targets, names) in enumerate(train_loader):
-        images_a, images_b, targets = images_a.to(device), images_b.to(device), targets.to(device)
-        optimizer.zero_grad()
-        outputs = model(images_a, images_b)#.squeeze()
-        loss = criterion(outputs, targets)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
-        log_interval = 10
-        if batch_idx % log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(images_a), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item()))
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run method comparison experiments: ProposedMethod vs CountNet."
+    )
+    add_common_args(parser)
+    parser.add_argument("--methods", nargs="+", default=["proposed", "countnet"],
+                        choices=["proposed", "countnet"])
+    parser.add_argument("--fpn", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--fusion", default="sum", choices=["sum", "concat", "attention"])
+    parser.add_argument("--experiment-name", default="method_comparison")
+    return parser.parse_args()
 
 
-def test(model, device, test_loader):
-    model.eval()
-    test_error = 0
+def main() -> None:
+    args = parse_args()
+    ground_truths = expand_ground_truths(args.ground_truth)
 
-    with torch.no_grad():
-        for batch_idx, (images_a, images_b, targets, names) in enumerate(test_loader):
-            images_a, images_b, targets = images_a.to(device), images_b.to(device), targets.to(device)
-            outputs = model(images_a, images_b).squeeze()
-
-            pred = np.array(outputs.cpu()).copy()
-            truth = np.array(targets.cpu()).copy().T[0]
-            dif = truth - pred
-            test_error += np.mean(np.abs(dif))
-
-    print()
-    print("Validations:", test_error)
-    print(truth.astype("int"))
-    print(dif.round().astype("int"))
-    return test_error, dif, names, pred
-
-
-def main(seed):
-    folds = 10
-    epochs = 300
-    use_cuda = True
-    batch_size = 8
-    ground_truth = False #  visually-estimated / field-validated
-    model_selector = "FPN" # FPN / CountNet / without_FPN
-
-    if model_selector == "FPN":
-        from nn_fpn import MultiViewNetwork
-    elif model_selector == "CountNet":
-        from reference_nn import ReferenceMultiViewNetwork as MultiViewNetwork
-    elif model_selector == "without_FPN":
-        from nn import MultiViewNetwork
-    else:
-        raise
-
-    set_random_seed(seed)
-
-    if use_cuda:
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
-
-    train_kwargs = {'batch_size': batch_size, "shuffle": True}
-    test_kwargs = {'batch_size': 16, "shuffle": False}
-    if use_cuda:
-        cuda_kwargs = {'num_workers': 1,
-                       'pin_memory': True}
-        train_kwargs.update(cuda_kwargs)
-        test_kwargs.update(cuda_kwargs)
+    for ground_truth in ground_truths:
+        for method in args.methods:
+            for seed in args.seeds:
+                run_name = slug(
+                    method,
+                    "fpn" if args.fpn and method == "proposed" else "no_fpn" if method == "proposed" else None,
+                    args.fusion if method == "proposed" else None,
+                    args.lr_decay,
+                    ground_truth,
+                )
+                config = ExperimentConfig(
+                    experiment=args.experiment_name,
+                    run_name=run_name,
+                    method=method,
+                    ground_truth=ground_truth,
+                    seed=seed,
+                    folds=args.folds,
+                    epochs=args.epochs,
+                    batch_size=args.batch_size,
+                    test_batch_size=args.test_batch_size,
+                    lr=args.lr,
+                    lr_decay=args.lr_decay,
+                    backbone=args.backbone,
+                    fpn=args.fpn,
+                    fusion=args.fusion,
+                    pretrained=not args.no_pretrained,
+                    device=args.device,
+                    data_glob=args.data_glob,
+                    results_dir=args.results_dir,
+                    checkpoints_dir=args.checkpoints_dir,
+                    num_workers=args.num_workers,
+                    log_every=args.log_every,
+                )
+                output = run_seed(config)
+                print(f"Wrote {output}")
 
 
-
-    data_path = "final_data/*.jpg"
-    filenames = list(glob(data_path))
-
-    observations = sorted(list(set([tuple(os.path.basename(name).split(".")[0].split("_")[0:3]) for name in filenames])))
-    trees = sorted(list(set([observation[1:3] for observation in observations])))
-
-    np.random.shuffle(trees)
-
-
-    kfold = KFold(n_splits=folds, shuffle=False)
-
-    results = []
-    convergence = np.zeros([epochs, folds])
-
-    for fold, (train_ids, test_ids) in enumerate(kfold.split(trees)):
-        print()
-        print("Fold:", fold + 1)
-
-        train_trees = [trees[i] for i in train_ids]
-        test_trees = [trees[i] for i in test_ids]
-
-        print(test_trees)
-
-        train_samples = [observation for observation in observations if observation[1:3] in train_trees]
-        test_samples = [observation for observation in observations if observation[1:3] in test_trees]
-
-        train_dataset = CustomDataset(train_samples, data_path, ground_truth=ground_truth)
-        train_loader = torch.utils.data.DataLoader(train_dataset, **train_kwargs)
-
-        test_dataset = CustomDataset(test_samples, data_path, augment=False, ground_truth=ground_truth)
-        test_loader = torch.utils.data.DataLoader(test_dataset, **test_kwargs)
-
-        model = MultiViewNetwork().to(device)
-        if model_selector in ["FPN", "withoutFPN"]:
-            criterion = nn.SmoothL1Loss()
-            optimizer = optim.AdamW(model.parameters(), lr=1e-3)
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-6)
-            # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95) # TODO switch
-        else:
-            criterion = nn.MSELoss()
-            optimizer = optim.Adam(model.parameters(), lr=1e-4)
-            scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.972351)
-
-        best_error = 1000
-        best_results = None
-        for epoch in range(1, epochs + 1):
-            t0 = time.time()
-            train(model, criterion, device, optimizer, epoch, train_loader)
-            t1 = time.time() - t0
-            scheduler.step()
-            test_error, test_errors, names, predictions = test(model, device, test_loader)
-            convergence[epoch - 1, fold] = test_error
-            if test_error < best_error:
-                best_error = test_error
-                best_results = [(str(name), str(pred), str(error), str(epoch)) for name, error, pred in zip(names, list(test_errors), list(predictions))]
-                torch.save(model.state_dict(), f"checkpoints/model_{seed}_{fold + 1}.pt")
-
-            with open(f"results/execution.txt", "a") as f:
-                f.write(str(t1) + "\n")
-
-        results += best_results
-
-    out_data = "\n".join(["\t".join(line) for line in results])
-    with open(f"results/results_{seed}_{ground_truth}.tsv", "w") as f:
-        f.write(out_data)
-    np.savetxt(f"results/convergence_{seed}_{ground_truth}.tsv", convergence, delimiter="\t")
-
-
-if __name__ == '__main__':
-    for seed in [1, 12, 23, 34, 45, 56, 67, 78, 89, 90]: # seeds chosen according to pattern
-        main(seed)
-
-
-
+if __name__ == "__main__":
+    main()

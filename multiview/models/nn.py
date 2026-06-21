@@ -34,19 +34,17 @@ class MultiViewNetwork(nn.Module):
             nn.init.xavier_uniform_(m.weight, gain=0.1)
             m.bias.data.fill_(0.01)
 
-    def forward_once(self, x):
+    def extract_features(self, x):
         output = self.resnet(x)
         output = output.view(output.size()[0], -1)
         return output
 
+    def forward_once(self, x):
+        return self.fc1(self.extract_features(x))
+
     def forward(self, input1, input2):
-        output1 = self.forward_once(input1)
-        output2 = self.forward_once(input2)
+        num1 = self.forward_once(input1)
+        num2 = self.forward_once(input2)
 
-        num1 = self.fc1(output1)
-        num2 = self.fc1(output2)
-
-        output = num1 + num2
-
-        return output
+        return num1 + num2
 

@@ -48,7 +48,7 @@ class MultiViewNetwork(nn.Module):
         )
 
 
-    def forward_once(self, x):
+    def extract_features(self, x):
         # Extract features at different scales from ResNet
         c1 = self.resnet_layers['conv1'](x)
         c1 = self.resnet_layers['bn1'](c1)
@@ -79,10 +79,11 @@ class MultiViewNetwork(nn.Module):
         # Concatenate features from all scales
         combined_features = torch.cat([p2_gap, p3_gap, p4_gap, c5_gap], dim=1)  # [B, 256*4]
 
-        # Pass through fully connected layers
-        output = self.fc(combined_features)
+        return combined_features
 
-        return output
+    def forward_once(self, x):
+        # Pass through fully connected layers
+        return self.fc(self.extract_features(x))
 
 
     def forward(self, input1, input2):

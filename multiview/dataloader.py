@@ -1,7 +1,7 @@
-from __future__ import print_function
 import os
 
 os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
 import albumentations as A
 
@@ -77,7 +77,7 @@ class CustomDataset(Dataset):
 
     def augment_albu(self, image):
         t = A.Compose([
-            A.ShiftScaleRotate(p=1, shift_limit=(-0.01, 0.01), scale_limit=(-0.01, 0.01), rotate_limit=(-1, 1)),
+            A.Affine(p=1, translate_percent=(-0.01, 0.01), scale=(0.99, 1.01), rotate=(-1, 1), shear=(0, 0)),
             # A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=1),
             # A.HueSaturationValue(hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=10, p=1),
             # A.GaussianBlur(blur_limit=(3, 5), p=1),
